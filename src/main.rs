@@ -1,81 +1,123 @@
 extern crate nalgebra as na;
 extern crate num_complex;
+extern crate rand;
 
-use na::{DMatrix, Matrix2};
+use na::{Matrix4, Vector4};
 use num_complex::Complex;
-use std::{f64::consts::PI, fmt};
+use rand::Rng;
+use rand::seq::SliceRandom;
 
-type ComplexMatrix = DMatrix<Complex<f64>>;
-type ComplexVector = DMatrix<Complex<f64>>;
+type ComplexMatrix4 = Matrix4<Complex<f64>>;
+type ComplexVector4 = Vector4<Complex<f64>>;
 
-// Placeholder for a time-evolution operator
-fn time_evolution(hamiltonian: &ComplexMatrix, time: f64) -> ComplexMatrix {
-    // This would compute exp(-i * H * t), which requires matrix exponentiation.
-    // Here, we'll return an identity matrix as a placeholder.
-    ComplexMatrix::identity(hamiltonian.nrows(), hamiltonian.ncols())
+struct QuantumCircuit {
+    state: ComplexVector4,
 }
 
-// Quantum Fourier Transform on a vector state
-fn quantum_fourier_transform(state: &ComplexVector) -> ComplexVector {
-    let n = state.nrows();
-    let mut qft_matrix = ComplexMatrix::zeros(n, n);
-
-    for k in 0..n {
-        for j in 0..n {
-            let value = Complex::new(0.0, 2.0 * PI * k as f64 * j as f64 / n as f64).exp();
-            qft_matrix[(k, j)] = value / (n as f64).sqrt();
+impl QuantumCircuit {
+    fn new() -> Self {
+        Self {
+            state: Vector4::new(Complex::new(1.0, 0.0), Complex::new(0.0, 0.0), Complex::new(0.0, 0.0), Complex::new(0.0, 0.0)),
         }
     }
 
-    qft_matrix * state
-}
+    fn apply_gate(&mut self, gate: &ComplexMatrix4) {
+        self.state = gate * self.state;
+    }
 
-// Function to measure the quantum state, collapsing it to a classical state
-fn measure_state(state: &ComplexVector) -> usize {
-    // This would involve randomness and probability distributions.
-    // As a placeholder, we simply return the index of the largest probability amplitude.
-    let mut max_val = 0.0;
-    let mut max_idx = 0;
-    for i in 0..state.nrows() {
-        let val = state[i].norm_sqr();
-        if val > max_val {
-            max_val = val;
-            max_idx = i;
+    fn measure(&self) -> u8 {
+        let mut rng = rand::thread_rng();
+        let mut accumulated_probability = 0.0;
+        for i in 0..4 {
+            accumulated_probability += self.state[i].norm_sqr();
+            if rng.gen::<f64>() < accumulated_probability {
+                return i as u8;
+            }
+        }
+        0
+    }
+
+    fn measure_collapse(&mut self) -> String {
+        let measured_bit = self.measure();
+        self.state = Vector4::zeros();
+        self.state[measured_bit as usize] = Complex::new(1.0, 0.0);
+        format!("{:02b}", measured_bit)
+    }
+
+    // Simulates quantum decoherence by randomly applying a Pauli-Z gate to a qubit
+    fn decohere(&mut self) {
+        let mut rng = rand::thread_rng();
+        if rng.gen_bool(0.01) { // 1% chance for decoherence
+            let pauli_z = pauli_z_gate();
+            self.apply_gate(&pauli_z);
         }
     }
-    max_idx
+
+    // Implements a simple error correction code which corrects a single bit flip
+    fn error_correction(&mut self) {
+        // This is a placeholder for a more complex error correction implementation
+    }
+}
+
+fn hadamard_gate() -> ComplexMatrix4 {
+    let normalization = Complex::new(1.0 / 2.0f64.sqrt(), 0.0);
+    Matrix4::new(
+        normalization, normalization, Complex::new(0.0, 0.0), Complex::new(0.0, 0.0),
+        normalization, -normalization, Complex::new(0.0, 0.0), Complex::new(0.0, 0.0),
+        Complex::new(0.0, 0.0), Complex::new(0.0, 0.0), normalization, normalization,
+        Complex::new(0.0, 0.0), Complex::new(0.0, 0.0), normalization, -normalization,
+    )
+}
+
+fn cnot_gate() -> ComplexMatrix4 {
+    Matrix4::new(
+        Complex::new(1.0, 0.0), Complex::new(0.0, 0.0), Complex::new(0.0, 0.0), Complex::new(0.0, 0.0),
+        Complex::new(0.0, 0.0), Complex::new(1.0, 0.0), Complex::new(0.0, 0.0), Complex::new(0.0, 0.0),
+        Complex::new(0.0, 0.0), Complex::new(0.0, 0.0), Complex::new(0.0, 0.0), Complex::new(1.0, 0.0),
+        Complex::new(0.0, 0.0), Complex::new(0.0, 0.0), Complex::new(1.0, 0.0), Complex::new(0.0, 0.0),
+    )
+}
+
+fn pauli_x_gate() -> ComplexMatrix4 {
+    Matrix4::new(
+        Complex::new(0.0, 0.0), Complex::new(1.0, 0.0), Complex::new(0.0, 0.0), Complex::new(0.0, 0.0),
+        Complex::new(1.0, 0.0), Complex::new(0.0, 0.0), Complex::new(0.0, 0.0), Complex::new(0.0, 0.0),
+        Complex::new(0.0, 0.0), Complex::new(0.0, 0.0), Complex::new(1.0, 0.0), Complex::new(0.0, 0.0),
+        Complex::new(0.0, 0.0), Complex::new(0.0, 0.0), Complex::new(0.0, 0.0), Complex::new(1.0, 0.0),
+    )
+}
+
+fn pauli_z_gate() -> ComplexMatrix4 {
+    Matrix4::new(
+        Complex::new(1.0, 0.0), Complex::new(0.0, 0.0), Complex::new(0.0, 0.0), Complex::new(0.0, 0.0),
+        Complex::new(0.0, 0.0), Complex::new(-1.0, 0.0), Complex::new(0.0, 0.0), Complex::new(0.0, 0.0),
+        Complex::new(0.0, 0.0), Complex::new(0.0, 0.0), Complex::new(1.0, 0.0), Complex::new(0.0, 0.0),
+        Complex::new(0.0, 0.0), Complex::new(0.0, 0.0), Complex::new(0.0, 0.0), Complex::new(-1.0, 0.0),
+    )
 }
 
 fn main() {
-    let hamiltonian = Matrix2::new(
-        Complex::new(1.0, 0.0), Complex::new(0.0, 0.0),
-        Complex::new(0.0, 0.0), Complex::new(-1.0, 0.0),
-    );
+    let mut circuit = QuantumCircuit::new();
+    let hadamard = hadamard_gate();
+    let cnot = cnot_gate();
+    let pauli_x = pauli_x_gate();
 
-    let mut state = DMatrix::from_column_slice(2, 1, &[
-        Complex::new(1.0, 0.0),
-        Complex::new(0.0, 0.0),
-    ]);
+    // Apply the Hadamard gate to the first qubit
+    circuit.apply_gate(&hadamard);
 
-    // Simulate time evolution
-    let time = 1.0; // Placeholder for time
-    let u = time_evolution(&hamiltonian, time);
-    state = u * state;
+    // Apply the CNOT gate, which entangles the two qubits
+    circuit.apply_gate(&cnot);
 
-    // Apply the Quantum Fourier Transform
-    state = quantum_fourier_transform(&state);
+    // Simulate decoherence
+    circuit.decohere();
 
-    // Measure the state
-    let measured_index = measure_state(&state);
-    println!("The measured state index is: {}", measured_index);
-}
+    // Apply error correction (no-op in this simplified example)
+    circuit.error_correction();
 
-// Define a custom formatter for ComplexVector for better readability
-impl fmt::Display for ComplexVector {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        for i in 0..self.nrows() {
-            write!(f, "|{}⟩: {}\n", i, self[i])?;
-        }
-        Ok(())
-    }
+    // Apply a Pauli-X gate to demonstrate additional gate usage (flips a qubit)
+    circuit.apply_gate(&pauli_x);
+
+    // Measure the quantum circuit (collapse the wavefunction)
+    let measured_state = circuit.measure_collapse();
+    println!("Measured classical state: {}", measured_state);
 }
